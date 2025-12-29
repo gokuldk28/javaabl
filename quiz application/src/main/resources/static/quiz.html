@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take Quiz - Quiz Application</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Quiz Application</h1>
+            <nav id="navBar"></nav>
+        </header>
+
+        <main>
+            <div id="quizContainer">
+                <div id="quizHeader">
+                    <h2 id="quizTitle"></h2>
+                    <div id="timer">Time Remaining: <span id="timeDisplay">--:--</span></div>
+                </div>
+                <div id="questionsContainer"></div>
+                <div class="quiz-actions">
+                    <button id="submitQuiz" class="btn btn-primary" onclick="submitQuiz()">Submit Quiz</button>
+                </div>
+            </div>
+            <div id="resultContainer" style="display: none;">
+                <h2>Quiz Results</h2>
+                <div id="resultDetails"></div>
+                <button onclick="window.location.href='quizzes.html'" class="btn btn-primary">Back to Quizzes</button>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        let quizData = null;
+        let answers = {};
+        let startTime = null;
+        let timeLimit = 0;
+        let timerInterval = null;
+
+        checkAuth();
+
+        async function loadQuiz() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const quizId = urlParams.get('id');
+
+            try {
+                const response = await fetch(`http://localhost:8090/api/user/quizzes/${quizId}`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    }
+                });
+
+                if (response.ok) {
+                    quizData = await response.json();
+                    startTime = Date.now();
+                    timeLimit = quizData.timeLimitMinutes * 60;
+                    displayQuiz();
+                    startTimer();
+                } else if (response.status === 401) {
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                console.error('Error loading quiz:', error);
+            }
+        }
+
+        function displayQuiz() {
+            document.getElementById('quizTitle').textContent = quizData.title;
+            const container = document.getElementById('questionsContainer');
+            container.innerHTML = quizData.questions.map((q, index) => `
+                <div class="question-card">
+                    <h3>Question ${index + 1}</h3>
+                    <p>${q.questionText}</p>
+                    <div class="options">
+                        ${q.options.map((opt, optIndex) => `
+                            <label class="option-label">
+                                <input type="radio" name="q${q.id}" value="${optIndex}" 
+                                    onchange="setAnswer(${q.id}, ${optIndex})">
+                                ${opt}
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function setAnswer(questionId, answerIndex) {
+            answers[questionId] = answerIndex;
+        }
+
+        function startTimer() {
+            const endTime = startTime + (timeLimit * 1000);
+            timerInterval = setInterval(() => {
+                const now = Date.now();
+                const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+                
+                const minutes = Math.floor(remaining / 60);
+                const seconds = remaining % 60;
+                document.getElementById('timeDisplay').textContent = 
+                    `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+                if (remaining === 0) {
+                    clearInterval(timerInterval);
+                    submitQuiz();
+                }
+            }, 1000);
+        }
+
+        async function submitQuiz() {
+            clearInterval(timerInterval);
+            const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+
+            try {
+                const response = await fetch(`http://localhost:8090/api/user/quizzes/${quizData.id}/attempt`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify({
+                        answers: answers,
+                        timeTakenSeconds: timeTaken
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    displayResult(result);
+                }
+            } catch (error) {
+                console.error('Error submitting quiz:', error);
+            }
+        }
+
+        function displayResult(result) {
+            document.getElementById('quizContainer').style.display = 'none';
+            document.getElementById('resultContainer').style.display = 'block';
+            
+            const resultDetails = document.getElementById('resultDetails');
+            resultDetails.innerHTML = `
+                <div class="result-card">
+                    <h3>Score: ${result.totalScore} / ${result.maxScore}</h3>
+                    <p>Percentage: ${result.percentage}%</p>
+                    <p>Time Taken: ${Math.floor(result.timeTakenSeconds / 60)}m ${result.timeTakenSeconds % 60}s</p>
+                    <button onclick="viewLeaderboard(${result.quizId})" class="btn btn-secondary">View Leaderboard</button>
+                </div>
+            `;
+        }
+
+        function viewLeaderboard(quizId) {
+            window.location.href = `leaderboard.html?quizId=${quizId}`;
+        }
+
+        loadQuiz();
+    </script>
+</body>
+</html>
+

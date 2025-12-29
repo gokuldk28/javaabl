@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Quiz Application</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Quiz Application - Admin Panel</h1>
+            <nav id="navBar"></nav>
+        </header>
+
+        <main>
+            <div class="admin-header">
+                <h2>Manage Quizzes</h2>
+                <button onclick="showCreateQuizForm()" class="btn btn-primary">+ Create New Quiz</button>
+            </div>
+
+            <div id="createQuizForm" style="display: none;" class="form-container">
+                <h3>Create New Quiz</h3>
+                <p class="form-help">Fill in the quiz details below and add questions. You can add multiple questions using the "Add Question" button.</p>
+                <form id="quizForm">
+                    <input type="hidden" id="quizId">
+                    <div class="form-group">
+                        <label>Title:</label>
+                        <input type="text" id="quizTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description:</label>
+                        <textarea id="quizDescription"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Category:</label>
+                        <input type="text" id="quizCategory">
+                    </div>
+                    <div class="form-group">
+                        <label>Difficulty:</label>
+                        <select id="quizDifficulty">
+                            <option value="EASY">Easy</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="HARD">Hard</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Time Limit (minutes):</label>
+                        <input type="number" id="quizTimeLimit" required min="1">
+                    </div>
+                    <div id="questionsContainer"></div>
+                    <button type="button" onclick="addQuestion()" class="btn btn-secondary">Add Question</button>
+                    <button type="submit" class="btn btn-primary">Save Quiz</button>
+                    <button type="button" onclick="cancelEdit()" class="btn btn-secondary">Cancel</button>
+                </form>
+            </div>
+
+            <div id="quizzesList" class="quizzes-grid"></div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        checkAuth();
+
+        let questionCounter = 0;
+
+        async function loadQuizzes() {
+            try {
+                const response = await fetch('http://localhost:8090/api/admin/quizzes', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    }
+                });
+
+                if (response.ok) {
+                    const quizzes = await response.json();
+                    displayQuizzes(quizzes);
+                } else if (response.status === 401 || response.status === 403) {
+                    alert('You are not authorized to access this page');
+                    window.location.href = 'quizzes.html';
+                }
+            } catch (error) {
+                console.error('Error loading quizzes:', error);
+            }
+        }
+
+        function displayQuizzes(quizzes) {
+            const container = document.getElementById('quizzesList');
+            if (quizzes.length === 0) {
+                container.innerHTML = '<p>No quizzes available. Create one!</p>';
+                return;
+            }
+
+            container.innerHTML = quizzes.map(quiz => `
+                <div class="quiz-card">
+                    <h3>${quiz.title}</h3>
+                    <p>${quiz.description || 'No description'}</p>
+                    <div class="quiz-info">
+                        <span class="badge">${quiz.category || 'General'}</span>
+                        <span class="badge">${quiz.difficultyLevel}</span>
+                        <span class="badge">${quiz.timeLimitMinutes} min</span>
+                    </div>
+                    <p><strong>Questions:</strong> ${quiz.questions ? quiz.questions.length : 0}</p>
+                    <div class="quiz-actions">
+                        <button onclick="editQuiz(${quiz.id})" class="btn btn-secondary">Edit</button>
+                        <button onclick="deleteQuiz(${quiz.id})" class="btn btn-danger">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showCreateQuizForm() {
+            document.getElementById('quizForm').reset();
+            document.getElementById('quizId').value = '';
+            document.getElementById('questionsContainer').innerHTML = '';
+            questionCounter = 0;
+            
+            // Show the form
+            const form = document.getElementById('createQuizForm');
+            form.style.display = 'block';
+            
+            // Scroll to the form
+            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Automatically add first question
+            addQuestion();
+        }
+
+        function addQuestion() {
+            const container = document.getElementById('questionsContainer');
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'question-form';
+            questionDiv.id = `question-${questionCounter}`;
+            questionDiv.innerHTML = `
+                <h4>Question ${questionCounter + 1}</h4>
+                <div class="form-group">
+                    <label>Question Text:</label>
+                    <textarea class="question-text" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Option 1:</label>
+                    <input type="text" class="option-input" required>
+                </div>
+                <div class="form-group">
+                    <label>Option 2:</label>
+                    <input type="text" class="option-input" required>
+                </div>
+                <div class="form-group">
+                    <label>Option 3:</label>
+                    <input type="text" class="option-input" required>
+                </div>
+                <div class="form-group">
+                    <label>Option 4:</label>
+                    <input type="text" class="option-input" required>
+                </div>
+                <div class="form-group">
+                    <label>Correct Answer:</label>
+                    <select class="correct-answer" required>
+                        <option value="0">Option 1</option>
+                        <option value="1">Option 2</option>
+                        <option value="2">Option 3</option>
+                        <option value="3">Option 4</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Points:</label>
+                    <input type="number" class="question-points" value="1" min="1">
+                </div>
+                <button type="button" onclick="removeQuestion(${questionCounter})" class="btn btn-danger">Remove</button>
+            `;
+            container.appendChild(questionDiv);
+            questionCounter++;
+        }
+
+        function removeQuestion(index) {
+            const questionDiv = document.getElementById(`question-${index}`);
+            if (questionDiv) {
+                questionDiv.remove();
+                updateQuestionNumbers();
+            }
+        }
+
+        function updateQuestionNumbers() {
+            const questions = document.querySelectorAll('.question-form');
+            questions.forEach((q, index) => {
+                q.querySelector('h4').textContent = `Question ${index + 1}`;
+            });
+        }
+
+        async function editQuiz(quizId) {
+            try {
+                const response = await fetch(`http://localhost:8090/api/admin/quizzes/${quizId}`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    }
+                });
+
+                if (response.ok) {
+                    const quiz = await response.json();
+                    document.getElementById('quizId').value = quiz.id;
+                    document.getElementById('quizTitle').value = quiz.title;
+                    document.getElementById('quizDescription').value = quiz.description || '';
+                    document.getElementById('quizCategory').value = quiz.category || '';
+                    document.getElementById('quizDifficulty').value = quiz.difficultyLevel;
+                    document.getElementById('quizTimeLimit').value = quiz.timeLimitMinutes;
+
+                    const questionsContainer = document.getElementById('questionsContainer');
+                    questionsContainer.innerHTML = '';
+                    questionCounter = 0;
+
+                    if (quiz.questions) {
+                        quiz.questions.forEach(q => {
+                            const questionDiv = document.createElement('div');
+                            questionDiv.className = 'question-form';
+                            questionDiv.id = `question-${questionCounter}`;
+                            questionDiv.innerHTML = `
+                                <h4>Question ${questionCounter + 1}</h4>
+                                <div class="form-group">
+                                    <label>Question Text:</label>
+                                    <textarea class="question-text" required>${q.questionText}</textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>Option 1:</label>
+                                    <input type="text" class="option-input" value="${q.options[0]}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Option 2:</label>
+                                    <input type="text" class="option-input" value="${q.options[1]}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Option 3:</label>
+                                    <input type="text" class="option-input" value="${q.options[2]}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Option 4:</label>
+                                    <input type="text" class="option-input" value="${q.options[3]}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Correct Answer:</label>
+                                    <select class="correct-answer" required>
+                                        <option value="0" ${q.correctAnswerIndex === 0 ? 'selected' : ''}>Option 1</option>
+                                        <option value="1" ${q.correctAnswerIndex === 1 ? 'selected' : ''}>Option 2</option>
+                                        <option value="2" ${q.correctAnswerIndex === 2 ? 'selected' : ''}>Option 3</option>
+                                        <option value="3" ${q.correctAnswerIndex === 3 ? 'selected' : ''}>Option 4</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Points:</label>
+                                    <input type="number" class="question-points" value="${q.points || 1}" min="1">
+                                </div>
+                                <button type="button" onclick="removeQuestion(${questionCounter})" class="btn btn-danger">Remove</button>
+                            `;
+                            questionsContainer.appendChild(questionDiv);
+                            questionCounter++;
+                        });
+                    }
+
+                    document.getElementById('createQuizForm').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading quiz:', error);
+            }
+        }
+
+        async function deleteQuiz(quizId) {
+            if (!confirm('Are you sure you want to delete this quiz?')) return;
+
+            try {
+                const response = await fetch(`http://localhost:8090/api/admin/quizzes/${quizId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    }
+                });
+
+                if (response.ok) {
+                    loadQuizzes();
+                } else {
+                    alert('Error deleting quiz');
+                }
+            } catch (error) {
+                console.error('Error deleting quiz:', error);
+            }
+        }
+
+        document.getElementById('quizForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Validate quiz title
+            const quizTitle = document.getElementById('quizTitle').value.trim();
+            if (!quizTitle) {
+                alert('Please enter a quiz title');
+                return;
+            }
+
+            // Validate time limit
+            const timeLimit = parseInt(document.getElementById('quizTimeLimit').value);
+            if (!timeLimit || timeLimit < 1) {
+                alert('Please enter a valid time limit (at least 1 minute)');
+                return;
+            }
+
+            // Collect questions
+            const questions = [];
+            const questionForms = document.querySelectorAll('.question-form');
+            
+            if (questionForms.length === 0) {
+                alert('Please add at least one question to the quiz');
+                return;
+            }
+
+            let validationError = false;
+            questionForms.forEach((qForm, index) => {
+                if (validationError) return;
+                
+                const questionText = qForm.querySelector('.question-text').value.trim();
+                const options = Array.from(qForm.querySelectorAll('.option-input')).map(inp => inp.value.trim());
+                const correctAnswerValue = qForm.querySelector('.correct-answer').value;
+                const points = parseInt(qForm.querySelector('.question-points').value) || 1;
+
+                // Validate question
+                if (!questionText) {
+                    alert(`Question ${index + 1}: Please enter question text`);
+                    validationError = true;
+                    return;
+                }
+
+                if (options.some(opt => !opt)) {
+                    alert(`Question ${index + 1}: Please fill in all options`);
+                    validationError = true;
+                    return;
+                }
+
+                if (!correctAnswerValue) {
+                    alert(`Question ${index + 1}: Please select the correct answer`);
+                    validationError = true;
+                    return;
+                }
+                const correctAnswer = parseInt(correctAnswerValue);
+
+                questions.push({
+                    questionText,
+                    options,
+                    correctAnswerIndex: correctAnswer,
+                    points
+                });
+            });
+
+            if (validationError || questions.length === 0) {
+                return; // Validation failed
+            }
+
+            const quizData = {
+                title: document.getElementById('quizTitle').value,
+                description: document.getElementById('quizDescription').value,
+                category: document.getElementById('quizCategory').value,
+                difficultyLevel: document.getElementById('quizDifficulty').value,
+                timeLimitMinutes: parseInt(document.getElementById('quizTimeLimit').value),
+                questions
+            };
+
+            const quizId = document.getElementById('quizId').value;
+            const url = quizId ? 
+                `http://localhost:8090/api/admin/quizzes/${quizId}` : 
+                'http://localhost:8090/api/admin/quizzes';
+            const method = quizId ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify(quizData)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert('Quiz saved successfully!');
+                    cancelEdit();
+                    loadQuizzes();
+                    // Scroll back to top
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Error saving quiz' }));
+                    alert('Error saving quiz: ' + (errorData.message || 'Please check all fields are filled correctly'));
+                }
+            } catch (error) {
+                console.error('Error saving quiz:', error);
+                alert('Error: Cannot connect to server. Make sure the backend is running.');
+            }
+        });
+
+        function cancelEdit() {
+            document.getElementById('createQuizForm').style.display = 'none';
+            document.getElementById('quizForm').reset();
+        }
+
+        loadQuizzes();
+    </script>
+</body>
+</html>
+

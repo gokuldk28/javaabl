@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Quiz Application</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Quiz Application</h1>
+            <nav id="navBar"></nav>
+        </header>
+
+        <main>
+            <div class="auth-container">
+                <h2>Login</h2>
+                <div class="login-info">
+                    <p><strong>Admin Login:</strong> Use admin credentials to create and manage quizzes</p>
+                    <p class="login-hint">Username: <code>admin</code> | Password: <code>admin123</code></p>
+                </div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">Username:</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                    <p style="margin-top: 15px;">Don't have an account? <a href="register.html">Register here</a></p>
+                    <p style="margin-top: 10px; font-size: 14px; color: #666;">
+                        New users will be created as regular users. Admin access is required to create quizzes.
+                    </p>
+                </form>
+                <div id="errorMessage" class="error-message"></div>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('http://localhost:8090/api/auth/signin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ message: 'Login failed. Please check if the server is running.' }));
+                    document.getElementById('errorMessage').textContent = errorData.message || 'Login failed';
+                    return;
+                }
+
+                const data = await response.json();
+
+                localStorage.setItem('token', data.accessToken);
+                localStorage.setItem('user', JSON.stringify({
+                    id: data.id,
+                    username: data.username,
+                    roles: data.roles
+                }));
+
+                // Redirect based on role
+                if (data.roles.includes('ROLE_ADMIN')) {
+                    window.location.href = 'admin.html';
+                } else {
+                    window.location.href = 'quizzes.html';
+                }
+            } catch (error) {
+                document.getElementById('errorMessage').textContent = 'Error: Cannot connect to server. Make sure the backend is running on http://localhost:8090';
+                console.error('Login error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
+

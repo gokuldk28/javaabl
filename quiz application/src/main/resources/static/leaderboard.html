@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard - Quiz Application</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Quiz Application</h1>
+            <nav id="navBar"></nav>
+        </header>
+
+        <main>
+            <h2>Leaderboard</h2>
+            <div id="leaderboardList"></div>
+            <button onclick="window.location.href='quizzes.html'" class="btn btn-primary">Back to Quizzes</button>
+        </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        checkAuth();
+
+        async function loadLeaderboard() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const quizId = urlParams.get('quizId');
+
+            try {
+                const response = await fetch(`http://localhost:8090/api/user/quizzes/${quizId}/leaderboard`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    }
+                });
+
+                if (response.ok) {
+                    const leaderboard = await response.json();
+                    displayLeaderboard(leaderboard);
+                } else if (response.status === 401) {
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+            }
+        }
+
+        function displayLeaderboard(leaderboard) {
+            const container = document.getElementById('leaderboardList');
+            if (leaderboard.length === 0) {
+                container.innerHTML = '<p>No attempts yet. Be the first!</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Username</th>
+                            <th>Score</th>
+                            <th>Percentage</th>
+                            <th>Time Taken</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${leaderboard.map((entry, index) => `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>${entry.username}</td>
+                                <td>${entry.totalScore} / ${entry.maxScore}</td>
+                                <td>${entry.percentage}%</td>
+                                <td>${Math.floor(entry.timeTakenSeconds / 60)}m ${entry.timeTakenSeconds % 60}s</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        loadLeaderboard();
+    </script>
+</body>
+</html>
+

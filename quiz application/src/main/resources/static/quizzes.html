@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quizzes - Quiz Application</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Quiz Application</h1>
+            <nav id="navBar"></nav>
+        </header>
+
+        <main>
+            <h2>Available Quizzes</h2>
+            <div id="quizzesList" class="quizzes-grid"></div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        checkAuth();
+
+        async function loadQuizzes() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                const response = await fetch('http://localhost:8090/api/user/quizzes', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error('Failed to load quizzes: ' + response.statusText);
+                }
+
+                const quizzes = await response.json();
+                displayQuizzes(quizzes);
+            } catch (error) {
+                console.error('Error loading quizzes:', error);
+                document.getElementById('quizzesList').innerHTML = 
+                    '<p class="error-message">Error: Cannot connect to server. Make sure the backend is running on http://localhost:8090</p>';
+            }
+        }
+
+        function displayQuizzes(quizzes) {
+            const container = document.getElementById('quizzesList');
+            if (quizzes.length === 0) {
+                container.innerHTML = '<p>No quizzes available.</p>';
+                return;
+            }
+
+            container.innerHTML = quizzes.map(quiz => `
+                <div class="quiz-card">
+                    <h3>${quiz.title}</h3>
+                    <p>${quiz.description || 'No description'}</p>
+                    <div class="quiz-info">
+                        <span class="badge">${quiz.category || 'General'}</span>
+                        <span class="badge">${quiz.difficultyLevel}</span>
+                        <span class="badge">${quiz.timeLimitMinutes} min</span>
+                    </div>
+                    <p><strong>Questions:</strong> ${quiz.questions ? quiz.questions.length : 0}</p>
+                    <button onclick="startQuiz(${quiz.id})" class="btn btn-primary">Start Quiz</button>
+                </div>
+            `).join('');
+        }
+
+        function startQuiz(quizId) {
+            window.location.href = `quiz.html?id=${quizId}`;
+        }
+
+        loadQuizzes();
+    </script>
+</body>
+</html>
+
